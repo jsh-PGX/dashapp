@@ -1,11 +1,11 @@
 from dash import Dash, html, dcc, Input, Output
 import plotly.express as px
-import numpy as np
 import pandas as pd
-import json
 
 app = Dash(__name__)
 server = app.server
+
+
 # Data Extraction
 def sort_list(e):
     return e["Count"]
@@ -63,7 +63,7 @@ def field_count(f, df, comps):
 
 
 # Main database file
-database_path = "index.csv"
+database_path = "J:/Petrogistix/PetroMine/Code/index/index.csv"
 # Read and store the main database
 main_database = pd.read_csv(database_path)
 # Get the field database to check onshore vs offshore fields
@@ -126,37 +126,16 @@ company_count = {i: companies.count(i) for i in companies if companies.count(i) 
 company_dict = {"Company": list(company_count.keys()), "Count": [company_count[i] for i in company_count]}
 
 # ---------- Plotly -------------- #
-'''
-# Plot the field pie chart
-df_pie = pd.DataFrame.from_dict(rigs_per_field)
-df_pie.loc[df_pie["Rig Count"] < 2, 'Field'] = "Other"
-pie_fig = px.pie(df_pie, names="Field", values="Rig Count", hover_data=["Location"])
-pie_fig.update_layout(title={'text': 'By Field', 'x': 0.5, 'y': 0, 'pad': {'b': 5}})
-pie_fig.update_traces(textposition='inside', textinfo='percent+label')
-
-# Plot the companies' pie chart
+# Plot the line chart
+line_fig = px.line(line_df, x="Month", y=line_df.columns[:-1])
+line_fig.update_layout(legend_title='Company')
+line_fig.for_each_trace(lambda trace: trace.update(visible="legendonly")
+                        if trace.name != "Total" else ())
+# Plot the company pie chart
 df_comp_pie = pd.DataFrame.from_dict(company_dict)
 comp_pie_fig = px.pie(df_comp_pie, names="Company", values="Count")
 comp_pie_fig.update_layout(title={'text': 'By Company', 'x': 0.5, 'y': 0, 'pad': {'b': 5}})
 comp_pie_fig.update_traces(textposition='inside', textinfo='percent+label')
-
-# Plot the bar chart
-df_bar = pd.DataFrame.from_dict(rigs_per_field)
-df_bar["Location"].replace("", np.NAN, inplace=True)
-df_bar = df_bar.dropna(0)
-bar_fig = px.bar(df_bar, x="Field", y="Rig Count", color="Location")
-
-# Active map using plotly
-lst_of_fields = rigs_per_field["Field"]
-lst_of_no_of_rigs = rigs_per_field["Rig Count"]
-
-map_df = pd.DataFrame.from_dict({"name": lst_of_fields, "Rigs": lst_of_no_of_rigs})
-with open("J:/Petrogistix/PetroMine/Other/oil_fields.json") as f:
-    geojson = json.load(f)
-rig_map = px.choropleth_mapbox(map_df, geojson=geojson, color="Rigs", locations="name", featureidkey="properties.name",
-                               mapbox_style="carto-positron", zoom=3, center={"lat": 24, "lon": 50})
-# rig_map.update_geos(fitbounds="locations")
-'''
 # ------------------- The App ------------------- #
 menu_options = list(line_df)
 menu_options.remove("Month")
@@ -170,34 +149,33 @@ app.layout = html.Div(children=[
       options=menu_options, value="Total", id="dropdown", multi=True
     ),
     dcc.Graph(
-        id='line'
+        figure=line_fig
     ),
-    dcc.Graph(
-        id='f_pie'
+
+    html.Div(
+        children=[dcc.Graph(id='f_pie', style={'display': 'inline-block'}),
+                  dcc.Graph(figure=comp_pie_fig, style={'display': 'inline-block'})
+                  ]
     ),
-    dcc.Graph(
-        id='map'
-    ),
+    dcc.Dropdown(options=menu_options, value="Total", id="ddlist_f"),
 ])
 
+
 # ---------- Plotly -------------- #
-# Plot the line chart
-@app.callback(
-    Output("line", "figure"),
-    Input("dropdown", "value"))
-def update_line_chart(company):
-    line_fig = px.line(line_df, x="Month", y=company)
-    return line_fig
 
 # Plot the fields' pie chart
 @app.callback(
     Output("f_pie", "figure"),
-    Input("dropdown", "value"))
+    Input("ddlist_f", "value"))
 def update_fpie_chart(f):
+    print(f)
+    print(type(f))
     field_df.loc[field_df["Total"] < 2, 'Field'] = "Other"
+    field_df['values'] = field_df[f] if type(f) == str else field_df[f].sum(axis=1)
     pie_fig = px.pie(field_df, names="Field", values=f, hover_data=["location"])
     pie_fig.update_layout(title={'text': 'By Field', 'x': 0.5, 'y': 0, 'pad': {'b': 5}})
     pie_fig.update_traces(textposition='inside', textinfo='percent+label')
+    return pie_fig
 
 
 if __name__ == '__main__':
